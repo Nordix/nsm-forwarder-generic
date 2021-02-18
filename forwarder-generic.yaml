@@ -32,6 +32,8 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
+            - name: FORWARDER
+              value: "/bin/forwarder.sh"
           volumeMounts:
             - name: spire-agent-socket
               mountPath: /run/spire/sockets

@@ -69,7 +69,6 @@ EOF
 }
 
 cmd_request() {
-	test -x /bin/ip && rm -f /sbin/ip
 	# json is global
 	json=/tmp/connection.json
 	jq 'del(.connection.path)' > $json
@@ -79,25 +78,59 @@ cmd_request() {
 
 	mpref=$(cat $json | jq -r '.mechanism_preferences[0].cls')
 	if test "$mpref" = "REMOTE"; then
-		remote_request
-		return
+		remote_request_nse
+		return 0
 	fi
 
 	mpref=$(cat $json | jq -r '.connection.mechanism.cls')
 	if test "$mpref" = "REMOTE"; then
-		remote_request
-		return
+		remote_request_nsc
+		return 0
 	fi
 
 	local_request
 }
 
-remote_request() {
-	echo "Remote request not implemented"
+# A remote request. We are on the NSC side.
+remote_request_nsc() {
+	echo "Remote request. NSC side"
+	local id=$RANDOM
+
+	local nsc=nsc$id
+	local url=$(cat $json | jq -r .mechanism_preferences[0].parameters.inodeURL)
+	mknetns $nsc $url
+
+	local param=".connection.mechanism.parameters"
+	local raddr=$(cat $json | jq -r $param.dst_ip)
+	local vni=$(cat $json | jq -r $param.vni)
+
+	ip link add name geneve$id type geneve id $vni remote $raddr
+	ip link set dev geneve$id netns $nsc
+
+	nsenter --net=/var/run/netns/$nsc $me ifsetup dst geneve$id
 }
 
-local_request() {
+# A remote request. We are on the NSE side
+remote_request_nse() {
+	echo "Remote request. NSE side"
 	local id=$RANDOM
+
+	local nse=nse$id
+	local url=$(cat $json | jq -r .connection.mechanism.parameters.inodeURL)
+	mknetns $nse $url
+
+	local param=".mechanism_preferences[0].parameters"
+	local raddr=$(cat $json | jq -r $param.src_ip)
+	local vni=$(cat $json | jq -r $param.vni)
+
+	ip link add name geneve$id type geneve id $vni remote $raddr
+	ip link set dev geneve$id netns $nse
+
+	nsenter --net=/var/run/netns/$nse $me ifsetup src geneve$id
+}
+
+# Local request. NSC and NSE are on the same node (this node).
+local_request() {
 	local dev=$(cat $json | jq -r .mechanism_preferences[0].parameters.name)
 	local url
 
