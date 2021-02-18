@@ -116,7 +116,6 @@ func main() {
 		logrus.Fatalf("failed to create registryCC: %+v", err)
 	}
 
-	// XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 	// create xconnect network service endpoint
 	tokenGenerator := spiffejwt.TokenGeneratorFunc(source, config.MaxTokenLifetime)
 	endpoint := endpoint.NewServer(
@@ -210,15 +209,22 @@ type calloutServer struct {
 func (s *calloutServer) Request(
 	ctx context.Context, request *networkservice.NetworkServiceRequest) (*networkservice.Connection, error) {
 
-	logrus.Infof("calloutServer(%s); request=%+v", s.id, request)
-	conn, err := next.Server(ctx).Request(ctx, request)
-	logrus.Infof("calloutServer(%s); conn=%+v, err=%v", s.id, conn, err)
+	if request.MechanismPreferences != nil {
+		ctx = context.WithValue(ctx, "MechanismPreferences", request.MechanismPreferences)
+	}
 
+	//logrus.Infof("calloutServer(%s); request=%+v", s.id, request)
+	conn, err := next.Server(ctx).Request(ctx, request)
+	//logrus.Infof("calloutServer(%s); conn=%+v, err=%v", s.id, conn, err)
+
+	// Add our own ip to a remote mechanism
 	if s.id == "mechanism" {
-		m := conn.Mechanism
-		if m != nil && m.Type == kernel.MECHANISM && m.Cls == cls.REMOTE {
-			m.Parameters["dst_ip"] = os.Getenv("POD_IP")
+		if conn.Mechanism != nil {
+			if conn.Mechanism.Cls == cls.REMOTE {
+				conn.Mechanism.Parameters["dst_ip"] = os.Getenv("POD_IP")
+			}
 		} else {
+			// (can conn.Mechanism ever be nil?)
 			conn.Mechanism = &networkservice.Mechanism{
 				Cls:        cls.REMOTE,
 				Type:       kernel.MECHANISM,
@@ -237,34 +243,12 @@ func (s *calloutServer) Close(
 	return next.Server(ctx).Close(ctx, conn)
 }
 
-func callout(ctx context.Context, id string, conn *networkservice.Connection) error {
-	forwarder := os.Getenv("FORWARDER")
-	if forwarder == "" {
-		forwarder = "/bin/forwarder.sh"
-	}
-	cmd := exec.Command(forwarder, id)
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return err
-	}
-	enc := json.NewEncoder(stdin)
-	go func() {
-		defer stdin.Close()
-		_ = enc.Encode(conn)
-	}()
-	if out, err := cmd.Output(); err != nil {
-		return err
-	} else {
-		fmt.Println(string(out))
-	}
-	return nil
-}
-
 type mechanismClient struct {
 	id string
 }
 func (k *mechanismClient) Request(
 	ctx context.Context, request *networkservice.NetworkServiceRequest, opts ...grpc.CallOption) (*networkservice.Connection, error) {
+/*
 	local := &networkservice.Mechanism{
 		Cls:        cls.LOCAL,
 		Type:       kernel.MECHANISM,
@@ -278,12 +262,80 @@ func (k *mechanismClient) Request(
 		},
 	}
 	request.MechanismPreferences = append(request.MechanismPreferences, local, remote)
-	conn, err := next.Client(ctx).Request(ctx, request, opts...)
-	callout(ctx, "connection", conn)
+*/
+	var err error
+	var conn *networkservice.Connection
+	request.MechanismPreferences, err = mechanismCallout(ctx)
+	if err != nil {
+		logrus.Infof("mechanismCallout err %v", err)
+	}
+	conn, err = next.Client(ctx).Request(ctx, request, opts...)
+	mechanismPreferences := ctx.Value("MechanismPreferences").([]*networkservice.Mechanism)
+	err = requestCallout(
+		ctx, &networkservice.NetworkServiceRequest{
+			Connection : conn,
+			MechanismPreferences : mechanismPreferences,
+		})
+	if err != nil {
+		logrus.Infof("requestCallout err %v", err)
+	}
 	return conn, err
 }
 
 func (k *mechanismClient) Close(
 	ctx context.Context, conn *networkservice.Connection, opts ...grpc.CallOption) (*empty.Empty, error) {
 	return next.Client(ctx).Close(ctx, conn, opts...)
+}
+
+
+// ----------------------------------------------------------------------
+// Callout functions
+
+func calloutProgram() string {
+	forwarder := os.Getenv("FORWARDER")
+	if forwarder == "" {
+		forwarder = "/bin/forwarder.sh"
+	}
+	return forwarder
+}
+
+// Send the Request in json format on stdin to the callout script 
+func requestCallout(ctx context.Context, req *networkservice.NetworkServiceRequest) error {
+	logrus.Infof("requestCallout")
+	cmd := exec.Command(calloutProgram(), "request")
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return err
+	}
+	enc := json.NewEncoder(stdin)
+	go func() {
+		defer stdin.Close()
+		_ = enc.Encode(req)
+	}()
+	if out, err := cmd.Output(); err != nil {
+		return err
+	} else {
+		fmt.Println(string(out))
+	}
+	return nil
+}
+
+// Expect a Mechanism array in json format on stdout from the callout script
+func mechanismCallout(ctx context.Context) ([]*networkservice.Mechanism, error) {
+	logrus.Infof("mechanismCallout")
+	cmd := exec.Command(calloutProgram(), "mechanism")
+	out, err := cmd.Output()
+	if err != nil {
+		logrus.Infof("mechanismCallout err %v", err)
+		return nil, err
+	}
+	fmt.Println(string(out))
+
+	var m []*networkservice.Mechanism
+	err = json.Unmarshal(out, &m)
+	if err != nil {
+		logrus.Infof("mechanismCallout Unmarshal err %v", err)
+		return nil, err
+	}
+	return m, nil
 }

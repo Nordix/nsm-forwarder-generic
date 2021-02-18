@@ -1,0 +1,39 @@
+@startuml
+autonumber
+hide footbox
+title NSM Remote Xconnect Setup
+box "node 1" #LightBlue
+participant nsc as NSC order 10
+participant "nsmgr" as LN order 20
+participant "forwarder" as LF order 30
+end box
+box "node 2"
+participant nse as NSE order 40
+participant "nsmgr" as RN order 50
+participant "forwarder" as RF order 60
+end box
+
+NSC->LN: Service.Request
+LN->LF: Service.Request
+note over LF: callout\nmechanism
+LF->LN: Service.Request
+LN->RN: Service.Request
+RN->RF: Service.Request
+note over RF: callout\nmechanism
+RF->RN: Service.Request
+RN->NSE: Service.Request
+note over NSE: IPAM
+NSE->RN: Connection
+RN->RF: Connection
+note over RF: callout\nrequest
+RF-->NSE: Inject-interface
+RF->RN: Connection
+RN->LN: Connection
+
+LN->LF: Connection
+note over LF: callout\nrequest
+LF-->NSC: Inject-interface
+LF->LN: Connection
+LN->NSC: Connection
+
+@enduml

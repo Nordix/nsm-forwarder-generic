@@ -1,4 +1,3 @@
-FROM alpine:latest
-RUN apk add jq
+FROM registry.nordix.org/cloud-native/mserver:latest
 COPY --chown=0:0 default/ /
-CMD ["/bin/nsm-forwarder-generic"]
+CMD ["/init"]

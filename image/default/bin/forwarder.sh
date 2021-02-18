@@ -9,6 +9,7 @@
 prg=$(basename $0)
 dir=$(dirname $0); dir=$(readlink -f $dir)
 tmp=/tmp/${prg}_$$
+me=$dir/$prg
 
 die() {
     echo "ERROR: $*" >&2
@@ -38,23 +39,115 @@ cmd_env() {
 	return 0
 }
 
-##  endpoint
-##  mechanism
-##  connection
-##    Callout functions. Expects a NSM-connection in json format on stdin.
+## Callout functions;
+##  request
+##    Expects a NSM-request in json format on stdin.
+##    This function shall setup communication and inject interfaces
 ##
-cmd_endpoint() {
-	echo "Callout-endpoint:"
-	jq .
-}
+##  mechanism
+##    Produce a networkservice.Mechanism mechanism array in json format
+##    on stdout
+##
 cmd_mechanism() {
-	echo "Callout-mechanism:"
-	jq .
+	cat <<EOF
+[
+  {
+    "cls": "LOCAL",
+    "type": "KERNEL"
+  },
+  {
+    "cls": "REMOTE",
+    "type": "KERNEL",
+    "parameters": {
+      "src_ip": "$POD_IP",
+      "vni": "$(( (RANDOM << 8) + RANDOM % 256 ))",
+      "vlan": "$(( RANDOM % 4093 + 1 ))"
+    }
+  }
+]
+EOF
 }
-cmd_connection() {
-	echo "Callout-connection:"
-	#tee /tmp/connection.json | jq 'del(.path)'
-	tee /tmp/connection.json | jq 'del(.path.path_segments[]|.token,.expires)'
+
+cmd_request() {
+	test -x /bin/ip && rm -f /sbin/ip
+	# json is global
+	json=/tmp/connection.json
+	jq 'del(.connection.path)' > $json
+	cat $json
+
+	local mpref
+
+	mpref=$(cat $json | jq -r '.mechanism_preferences[0].cls')
+	if test "$mpref" = "REMOTE"; then
+		remote_request
+		return
+	fi
+
+	mpref=$(cat $json | jq -r '.connection.mechanism.cls')
+	if test "$mpref" = "REMOTE"; then
+		remote_request
+		return
+	fi
+
+	local_request
+}
+
+remote_request() {
+	echo "Remote request not implemented"
+}
+
+local_request() {
+	local id=$RANDOM
+	local dev=$(cat $json | jq -r .mechanism_preferences[0].parameters.name)
+	local url
+
+	local nsc=nsc$id
+	url=$(cat $json | jq -r .mechanism_preferences[0].parameters.inodeURL)
+	mknetns $nsc $url
+
+	local nse=nse$id
+	url=$(cat $json | jq -r .connection.mechanism.parameters.inodeURL)
+	mknetns $nse $url
+
+	ip link add dev veth$id-0 type veth peer name veth$id-1
+	ip link set dev veth$id-0 netns $nsc
+	ip link set dev veth$id-1 netns $nse
+
+	nsenter --net=/var/run/netns/$nsc $me ifsetup dst veth$id-0
+	nsenter --net=/var/run/netns/$nse $me ifsetup src veth$id-1
+	return 0
+}
+
+# mknetns <name> <url>
+mknetns() {
+	# Url example; file:///proc/20/fd/11",
+	local file=$(echo $2 | sed -e 's,file://,,')
+	mkdir -p /var/run/netns
+	ln -s $file /var/run/netns/$1
+}
+
+##  ifsetup src/dst <ifname>
+##    Shall be called inside a POD's netns. Reads /tmp/connection.json
+##
+cmd_ifsetup() {
+	echo "ifsetup $1 $2"
+	json=/tmp/connection.json
+	local iface=$2
+	if test "$1" = "dst"; then
+		# This is the NSC. Rename the interface
+		iface=$(cat $json | jq -r .mechanism_preferences[0].parameters.name)
+		ip link set dev $2 name $iface
+	fi
+
+	ip link set up dev $iface
+
+	local x=$1
+	local addr=$(cat $json | jq -r .connection.context.ip_context.${x}_ip_addr)
+	ip addr add $addr dev $iface
+	local p
+	for p in $(cat $json | jq -r .connection.context.ip_context.${x}_routes[].prefix); do
+		ip route add $p dev $iface
+	done
 }
 
 
