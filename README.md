@@ -187,3 +187,17 @@ the ip of the "other" nsmgr and random values for "vlan" and "vni".
 images lreg_upload --strip-host registry.nordix.org/cloud-native/nsm/forwarder-generic:latest
 ```
 
+## Extension
+
+The callout script can be switched to a script which creates VLAN interface and inject it into the `nsc`. An `eth2` interface is required to be set on the node.
+
+```
+# Set a convenient network topology - eth2 interface needed
+export XOVLS="private-reg network-topology"
+export TOPOLOGY=multilan
+. $(xc ovld network-topology)/$TOPOLOGY/Envsettings
+
+# Start the generic forwarder with vlan
+export xcluster_NSM_FORWARDER=generic-vlan
+xcadmin k8s_test --no-stop nsm basic_nextgen > $log
+```
