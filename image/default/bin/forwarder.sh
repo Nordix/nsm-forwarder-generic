@@ -176,10 +176,12 @@ cmd_ifsetup() {
 
 	local x=$1
 	local addr=$(cat $json | jq -r .connection.context.ip_context.${x}_ip_addr)
-	ip addr add $addr dev $iface
+	local ip=ip
+	echo $addr | grep -q : && ip="ip -6"
+	$ip addr add $addr dev $iface
 	local p
 	for p in $(cat $json | jq -r .connection.context.ip_context.${x}_routes[].prefix); do
-		ip route add $p dev $iface
+		$ip route add $p dev $iface
 	done
 }
 
