@@ -32,7 +32,7 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
-            - name: FORWARDER
+            - name: CALLOUT
               value: "/bin/vlan-forwarder.sh"
           volumeMounts:
             - name: spire-agent-socket

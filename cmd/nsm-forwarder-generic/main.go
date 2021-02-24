@@ -292,11 +292,11 @@ func (k *mechanismClient) Close(
 // Callout functions
 
 func calloutProgram() string {
-	forwarder := os.Getenv("FORWARDER")
-	if forwarder == "" {
-		forwarder = "/bin/forwarder.sh"
+	callout := os.Getenv("CALLOUT")
+	if callout == "" {
+		return "/bin/forwarder.sh"
 	}
-	return forwarder
+	return callout
 }
 
 // Send the Request in json format on stdin to the callout script 
