@@ -20,49 +20,47 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/url"
 	"os"
-	"fmt"
-	"path/filepath"
-	"time"
-	"encoding/json"
 	"os/exec"
+	"path/filepath"
+	"sync"
+	"time"
 
 	"github.com/edwarnicke/grpcfd"
 	"github.com/edwarnicke/signalctx"
 	"github.com/golang/protobuf/ptypes"
+	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/sirupsen/logrus"
 	"github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"github.com/golang/protobuf/ptypes/empty"
 
+	"github.com/networkservicemesh/api/pkg/api/networkservice"
+	"github.com/networkservicemesh/api/pkg/api/networkservice/mechanisms/cls"
+	"github.com/networkservicemesh/api/pkg/api/networkservice/mechanisms/kernel"
 	registryapi "github.com/networkservicemesh/api/pkg/api/registry"
+	"github.com/networkservicemesh/sdk/pkg/networkservice/chains/client"
+	"github.com/networkservicemesh/sdk/pkg/networkservice/chains/endpoint"
 	"github.com/networkservicemesh/sdk/pkg/networkservice/common/authorize"
+	"github.com/networkservicemesh/sdk/pkg/networkservice/common/clienturl"
+	"github.com/networkservicemesh/sdk/pkg/networkservice/common/connect"
+	"github.com/networkservicemesh/sdk/pkg/networkservice/common/mechanisms"
+	"github.com/networkservicemesh/sdk/pkg/networkservice/common/mechanisms/recvfd"
+	"github.com/networkservicemesh/sdk/pkg/networkservice/common/mechanisms/sendfd"
+	"github.com/networkservicemesh/sdk/pkg/networkservice/common/mechanismtranslation"
+	"github.com/networkservicemesh/sdk/pkg/networkservice/core/next"
+	"github.com/networkservicemesh/sdk/pkg/networkservice/utils/metadata"
 	registryinterpose "github.com/networkservicemesh/sdk/pkg/registry/common/interpose"
 	registryrefresh "github.com/networkservicemesh/sdk/pkg/registry/common/refresh"
 	registrysendfd "github.com/networkservicemesh/sdk/pkg/registry/common/sendfd"
 	registrychain "github.com/networkservicemesh/sdk/pkg/registry/core/chain"
 	"github.com/networkservicemesh/sdk/pkg/tools/grpcutils"
 	"github.com/networkservicemesh/sdk/pkg/tools/spiffejwt"
-
-	"github.com/networkservicemesh/sdk/pkg/networkservice/chains/endpoint"
-	"github.com/networkservicemesh/api/pkg/api/networkservice"
-	"github.com/networkservicemesh/sdk/pkg/networkservice/core/next"
-
-	"github.com/networkservicemesh/sdk/pkg/networkservice/utils/metadata"
-	"github.com/networkservicemesh/sdk/pkg/networkservice/common/mechanisms/recvfd"
-	"github.com/networkservicemesh/sdk/pkg/networkservice/common/clienturl"
-	"github.com/networkservicemesh/sdk/pkg/networkservice/common/connect"
-	"github.com/networkservicemesh/sdk/pkg/networkservice/common/mechanismtranslation"
-	"github.com/networkservicemesh/sdk/pkg/networkservice/chains/client"
-	"github.com/networkservicemesh/sdk/pkg/networkservice/common/mechanisms/sendfd"
-	"github.com/networkservicemesh/sdk/pkg/networkservice/common/mechanisms"
-	"github.com/networkservicemesh/api/pkg/api/networkservice/mechanisms/kernel"
-	"github.com/networkservicemesh/api/pkg/api/networkservice/mechanisms/cls"
-
 )
 
 // Config - configuration for cmd-forwarder-vpp
@@ -120,7 +118,7 @@ func main() {
 	tokenGenerator := spiffejwt.TokenGeneratorFunc(source, config.MaxTokenLifetime)
 	endpoint := endpoint.NewServer(
 		ctx, config.Name, authorize.NewServer(), tokenGenerator,
-		&calloutServer{ id : "endpoint"},
+		&calloutServer{id: "endpoint"},
 		metadata.NewServer(),
 		recvfd.NewServer(),
 		// Statically set the url we use to the unix file socket for the NSMgr
@@ -135,7 +133,7 @@ func main() {
 				tokenGenerator,
 				mechanismtranslation.NewClient(),
 				// mechanisms
-				&mechanismClient{ id : "kernel"},
+				&mechanismClient{id: "kernel"},
 				recvfd.NewClient(),
 			),
 			grpc.WithTransportCredentials(clientCreds),
@@ -143,7 +141,7 @@ func main() {
 		),
 
 		mechanisms.NewServer(map[string]networkservice.NetworkServiceServer{
-			kernel.MECHANISM: &calloutServer{ id : "mechanism"},
+			kernel.MECHANISM: &calloutServer{id: "mechanism"},
 		}),
 
 		sendfd.NewServer(),
@@ -226,8 +224,8 @@ func (s *calloutServer) Request(
 		} else {
 			// (can conn.Mechanism ever be nil?)
 			conn.Mechanism = &networkservice.Mechanism{
-				Cls:        cls.REMOTE,
-				Type:       kernel.MECHANISM,
+				Cls:  cls.REMOTE,
+				Type: kernel.MECHANISM,
 				Parameters: map[string]string{
 					"dst_ip": os.Getenv("POD_IP"),
 				},
@@ -244,25 +242,27 @@ func (s *calloutServer) Close(
 }
 
 type mechanismClient struct {
-	id string
+	id    string
+	mutex sync.Mutex
 }
+
 func (k *mechanismClient) Request(
 	ctx context.Context, request *networkservice.NetworkServiceRequest, opts ...grpc.CallOption) (*networkservice.Connection, error) {
-/*
-	local := &networkservice.Mechanism{
-		Cls:        cls.LOCAL,
-		Type:       kernel.MECHANISM,
-		Parameters: map[string]string{},
-	}
-	remote := &networkservice.Mechanism{
-		Cls:        cls.REMOTE,
-		Type:       kernel.MECHANISM,
-		Parameters: map[string]string{
-			"src_ip": os.Getenv("POD_IP"),
-		},
-	}
-	request.MechanismPreferences = append(request.MechanismPreferences, local, remote)
-*/
+	/*
+		local := &networkservice.Mechanism{
+			Cls:        cls.LOCAL,
+			Type:       kernel.MECHANISM,
+			Parameters: map[string]string{},
+		}
+		remote := &networkservice.Mechanism{
+			Cls:        cls.REMOTE,
+			Type:       kernel.MECHANISM,
+			Parameters: map[string]string{
+				"src_ip": os.Getenv("POD_IP"),
+			},
+		}
+		request.MechanismPreferences = append(request.MechanismPreferences, local, remote)
+	*/
 	var err error
 	var conn *networkservice.Connection
 	request.MechanismPreferences, err = mechanismCallout(ctx)
@@ -271,11 +271,13 @@ func (k *mechanismClient) Request(
 	}
 	conn, err = next.Client(ctx).Request(ctx, request, opts...)
 	mechanismPreferences := ctx.Value("MechanismPreferences").([]*networkservice.Mechanism)
+	k.mutex.Lock()
 	err = requestCallout(
 		ctx, &networkservice.NetworkServiceRequest{
-			Connection : conn,
-			MechanismPreferences : mechanismPreferences,
+			Connection:           conn,
+			MechanismPreferences: mechanismPreferences,
 		})
+	k.mutex.Unlock()
 	if err != nil {
 		logrus.Infof("requestCallout err %v", err)
 	}
@@ -286,7 +288,6 @@ func (k *mechanismClient) Close(
 	ctx context.Context, conn *networkservice.Connection, opts ...grpc.CallOption) (*empty.Empty, error) {
 	return next.Client(ctx).Close(ctx, conn, opts...)
 }
-
 
 // ----------------------------------------------------------------------
 // Callout functions
@@ -299,7 +300,7 @@ func calloutProgram() string {
 	return callout
 }
 
-// Send the Request in json format on stdin to the callout script 
+// Send the Request in json format on stdin to the callout script
 func requestCallout(ctx context.Context, req *networkservice.NetworkServiceRequest) error {
 	logrus.Infof("requestCallout")
 	cmd := exec.Command(calloutProgram(), "request")
