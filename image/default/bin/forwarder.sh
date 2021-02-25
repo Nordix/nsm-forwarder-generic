@@ -70,7 +70,8 @@ EOF
 
 cmd_request() {
 	# json is global
-	json=/tmp/connection.json
+	mkdir -p $tmp
+	json=$tmp/connection.json
 	jq 'del(.connection.path)' > $json
 	cat $json
 
@@ -107,7 +108,8 @@ remote_request_nsc() {
 	ip link add name geneve$id type geneve id $vni remote $raddr
 	ip link set dev geneve$id netns $nsc
 
-	nsenter --net=/var/run/netns/$nsc $me ifsetup dst geneve$id
+	nsenter --net=/var/run/netns/$nsc $me ifsetup dst geneve$id $json
+	rm -f /var/run/netns/$nsc
 }
 
 # A remote request. We are on the NSE side
@@ -126,7 +128,8 @@ remote_request_nse() {
 	ip link add name geneve$id type geneve id $vni remote $raddr
 	ip link set dev geneve$id netns $nse
 
-	nsenter --net=/var/run/netns/$nse $me ifsetup src geneve$id
+	nsenter --net=/var/run/netns/$nse $me ifsetup src geneve$id $json
+	rm -f /var/run/netns/$nse
 }
 
 # Local request. NSC and NSE are on the same node (this node).
@@ -146,8 +149,11 @@ local_request() {
 	ip link set dev veth$id-0 netns $nsc
 	ip link set dev veth$id-1 netns $nse
 
-	nsenter --net=/var/run/netns/$nsc $me ifsetup dst veth$id-0
-	nsenter --net=/var/run/netns/$nse $me ifsetup src veth$id-1
+	nsenter --net=/var/run/netns/$nsc $me ifsetup dst veth$id-0 $json
+	nsenter --net=/var/run/netns/$nse $me ifsetup src veth$id-1 $json
+
+	rm -f /var/run/netns/$nsc
+	rm -f /var/run/netns/$nse
 	return 0
 }
 
@@ -163,8 +169,8 @@ mknetns() {
 ##    Shall be called inside a POD's netns. Reads /tmp/connection.json
 ##
 cmd_ifsetup() {
-	echo "ifsetup $1 $2"
-	json=/tmp/connection.json
+	echo "ifsetup $1 $2 $3"
+	json=$3
 	local iface=$2
 	if test "$1" = "dst"; then
 		# This is the NSC. Rename the interface
