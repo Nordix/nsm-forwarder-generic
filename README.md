@@ -5,7 +5,10 @@ A generic forwarder for NSM next-gen.
 This forwarder was created for educational and experimental
 purposes. It makes callouts to a script/program that will do the
 necessary network setup. This makes it easy to make a PoC for a new
-forwarder before implementing the real one.
+forwarder before implementing the real thing.
+
+For tests in [xcluster](https://github.com/Nordix/xcluster) please see
+[Nordix/nsm-test](https://github.com/Nordix/nsm-test).
 
 
 
@@ -183,21 +186,70 @@ the ip of the "other" nsmgr and random values for "vlan" and "vni".
 
 ```
 ./build.sh image
-# Upload to xcluster local registry
+# Upload to xcluster local registry if needed
 images lreg_upload --strip-host registry.nordix.org/cloud-native/nsm/forwarder-generic:latest
 ```
 
-## Extension
 
-The callout script can be switched to a script which creates VLAN interface and inject it into the `nsc`. An `eth2` interface is required to be set on the node.
+
+## Callout scripts
+
+The callout script can be defined with the `$CALLOUT` variable in the
+manifest.
+
+**Note** that the callout script can be on a mounted volume so you don't
+have to rebuild/upgrade `nsm-forwarder-generic` to try out your own
+callout script.
+
+The callout script (or program) will be called as;
 
 ```
-# Set a convenient network topology - eth2 interface needed
-export XOVLS="private-reg network-topology"
-export TOPOLOGY=multilan
-. $(xc ovld network-topology)/$TOPOLOGY/Envsettings
-
-# Start the generic forwarder with vlan
-export xcluster_NSM_FORWARDER=generic-vlan
-xcadmin k8s_test --no-stop nsm basic_nextgen > $log
+$CALLOUT <command>
 ```
+
+It must implement 3 commands; `request`, `mechanism` and `close`.
+
+```
+  request
+    Expects a NSM-request in json format on stdin.
+    This function shall setup communication and inject interfaces
+
+  mechanism
+    Produce a networkservice.Mechanism mechanism array in json format
+    on stdout
+
+  close
+    Expects a NSM-connection in json format on stdin.
+```
+
+### Internal callout scripts
+
+These are included in the `nsm-forwarder-generic` image.
+
+The scripts are found in [mage/default/bin](mage/default/bin) and can
+serve as templates.
+
+#### /bin/forwarder.sh
+
+This is the default callout. It will setup p-2-p connection between
+one NSE and NSCs. VETH is used if the NSE and NSC are on the same node
+GENEVE tunnels otherwise.
+
+#### /bin/vlan-forwarder.sh
+
+Creates VLAN interface and inject it into the `nsc`. An `eth2`
+interface is required on the node. Use the
+[forwarder-generic-vlan.yaml](forwarder-generic-vlan.yaml) manifest.
+
+#### /bin/ipvlan.sh
+
+Sets up a L2 lan using IPVLAN between one NSE and multiple NSCs. By
+default `eth3` is used but the interface can be specified with an
+`$INTERFACE` variable in the manifest.
+
+The NSE must use an IPAM that hands out addresses from a CIDR, not
+p-2-p addresses. So the NSM `cmd-nse-icmp-responder` can't be used,
+instead the
+[Nordix/nsm-nse-generic](https://github.com/Nordix/nsm-nse-generic/)
+in L2 mode can be used.
+
