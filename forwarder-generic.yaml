@@ -25,7 +25,9 @@ spec:
             - name: SPIFFE_ENDPOINT_SOCKET
               value: unix:///run/spire/sockets/agent.sock
             - name: NSM_NAME
-              value: "forwarder-generic"
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
             - name: NSM_CONNECT_TO
               value: "unix:///var/lib/networkservicemesh/nsm.io.sock"
             - name: POD_IP
