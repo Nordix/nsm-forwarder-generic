@@ -226,7 +226,7 @@ It must implement 3 commands; `request`, `mechanism` and `close`.
 
 These are included in the `nsm-forwarder-generic` image.
 
-The scripts are found in [mage/default/bin](mage/default/bin) and can
+The scripts are found in [image/default/bin](image/default/bin) and can
 serve as templates.
 
 #### /bin/forwarder.sh
