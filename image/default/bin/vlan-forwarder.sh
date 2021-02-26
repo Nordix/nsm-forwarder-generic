@@ -48,6 +48,9 @@ cmd_env() {
 ##    Produce a networkservice.Mechanism mechanism array in json format
 ##    on stdout
 ##
+##  close
+##    Expects a NSM-connection in json format on stdin.
+##
 cmd_mechanism() {
 	cat <<EOF
 [
@@ -90,6 +93,10 @@ cmd_request() {
 		return 0
 	fi
 	local_request
+}
+
+cmd_close() {
+	jq .
 }
 
 # A remote request. We are on the NSC side.

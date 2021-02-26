@@ -237,7 +237,8 @@ func (s *calloutServer) Request(
 }
 func (s *calloutServer) Close(
 	ctx context.Context, conn *networkservice.Connection) (*empty.Empty, error) {
-	logrus.Infof("calloutServer(%s); close=%+v", s.id, conn)
+	//logrus.Infof("calloutServer(%s); close=%+v", s.id, conn)
+	closeCallout(ctx, conn)
 	return next.Server(ctx).Close(ctx, conn)
 }
 
@@ -248,21 +249,6 @@ type mechanismClient struct {
 
 func (k *mechanismClient) Request(
 	ctx context.Context, request *networkservice.NetworkServiceRequest, opts ...grpc.CallOption) (*networkservice.Connection, error) {
-	/*
-		local := &networkservice.Mechanism{
-			Cls:        cls.LOCAL,
-			Type:       kernel.MECHANISM,
-			Parameters: map[string]string{},
-		}
-		remote := &networkservice.Mechanism{
-			Cls:        cls.REMOTE,
-			Type:       kernel.MECHANISM,
-			Parameters: map[string]string{
-				"src_ip": os.Getenv("POD_IP"),
-			},
-		}
-		request.MechanismPreferences = append(request.MechanismPreferences, local, remote)
-	*/
 	var err error
 	var conn *networkservice.Connection
 	request.MechanismPreferences, err = mechanismCallout(ctx)
@@ -286,6 +272,9 @@ func (k *mechanismClient) Request(
 
 func (k *mechanismClient) Close(
 	ctx context.Context, conn *networkservice.Connection, opts ...grpc.CallOption) (*empty.Empty, error) {
+	k.mutex.Lock()
+	closeCallout(ctx, conn)
+	k.mutex.Unlock()
 	return next.Client(ctx).Close(ctx, conn, opts...)
 }
 
@@ -312,6 +301,27 @@ func requestCallout(ctx context.Context, req *networkservice.NetworkServiceReque
 	go func() {
 		defer stdin.Close()
 		_ = enc.Encode(req)
+	}()
+	if out, err := cmd.Output(); err != nil {
+		return err
+	} else {
+		fmt.Println(string(out))
+	}
+	return nil
+}
+
+// Send the Request in json format on stdin to the callout script
+func closeCallout(ctx context.Context, conn *networkservice.Connection) error {
+	logrus.Infof("closeCallout")
+	cmd := exec.Command(calloutProgram(), "close")
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return err
+	}
+	enc := json.NewEncoder(stdin)
+	go func() {
+		defer stdin.Close()
+		_ = enc.Encode(conn)
 	}()
 	if out, err := cmd.Output(); err != nil {
 		return err
