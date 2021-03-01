@@ -1,0 +1,22 @@
+@startuml
+autonumber
+hide footbox
+title NSM Local Xconnect Close
+participant nsc as NSC order 10
+participant "nsmgr" as LN order 20
+participant "forwarder" as LF order 30
+participant nse as NSE order 40
+
+
+NSC->LN: Service.Close
+LN->LF: Service.Close
+LF->LN: Service.Close
+LN->NSE: Service.Close
+NSE->LN: return
+LN->LF: return
+note over LF: callout\nclose
+LF-->NSE: Delete-interface
+LF->LN: return
+LN->NSC: return
+
+@enduml

@@ -12,7 +12,7 @@ For tests in [xcluster](https://github.com/Nordix/xcluster) please see
 
 
 
-## Local
+## Local Request
 
 Sequence diagram when the `nsc` and `nse` are on the same node;
 
@@ -74,7 +74,7 @@ The obvious choice for Linux is a veth pair. The "inodeURL"s are used
 to get the netns of the PODs.
 
 
-## Remote
+## Remote Request
 
 Sequence diagram when the `nsc` and `nse` are on different nodes;
 
@@ -179,6 +179,18 @@ the ip of the "other" nsmgr and random values for "vlan" and "vni".
 **NOTE** there is a chance that vlan or vni will collide, but hey,
   this for experiments only.
 
+
+## Local Close
+
+Sequence diagram when the `nsc` and `nse` are on the same node;
+
+<img src="seq-close-local.svg" alt="Local Close" width="40%" />
+
+## Remote Close
+
+Sequence diagram when the `nsc` and `nse` are on different nodes;
+
+<img src="seq-close-remote.svg" alt="Remote setup" width="60%" />
 
 
 
