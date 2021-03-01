@@ -96,46 +96,57 @@ cmd_request() {
 }
 
 cmd_close() {
-	jq .
+	mkdir -p $tmp
+	json=$tmp/connection.json
+	jq 'del(.path.path_segments[]|.token,.expires,.id)' > $json
+	#jq . > $json
+	cat $json
+
+	local cls=$(cat $json | jq -r '.mechanism.cls')
+	test "$cls" = "REMOTE" && return 0
+
+	local file=$(cat $json | jq -r .mechanism.parameters.inodeURL | sed -e 's,file://,,')
+	echo "File [$file]"
+	test -e $file || return 0
+
+	nsenter --net=$file $me ifdel src $json
 }
 
 # A remote request. We are on the NSC side.
 remote_request_nsc() {
 	echo "Remote request. NSC side"
-	local id=$RANDOM
-
-	local nsc=nsc$id
+	local nsc=nsc$RANDOM
 	local url=$(cat $json | jq -r .mechanism_preferences[0].parameters.inodeURL)
 	mknetns $nsc $url
 
 	local param=".connection.mechanism.parameters"
 	local raddr=$(cat $json | jq -r $param.dst_ip)
 	local vni=$(cat $json | jq -r $param.vni)
+	local dev=vni$vni
 
-	ip link add name geneve$id type geneve id $vni remote $raddr
-	ip link set dev geneve$id netns $nsc
+	ip link add name $dev type geneve id $vni remote $raddr
+	ip link set dev $dev netns $nsc
 
-	nsenter --net=/var/run/netns/$nsc $me ifsetup dst geneve$id $json
+	nsenter --net=/var/run/netns/$nsc $me ifsetup dst $dev $json
 	rm -f /var/run/netns/$nsc
 }
 
 # A remote request. We are on the NSE side
 remote_request_nse() {
 	echo "Remote request. NSE side"
-	local id=$RANDOM
-
-	local nse=nse$id
+	local nse=nse$RANDOM
 	local url=$(cat $json | jq -r .connection.mechanism.parameters.inodeURL)
 	mknetns $nse $url
 
 	local param=".mechanism_preferences[0].parameters"
 	local raddr=$(cat $json | jq -r $param.src_ip)
 	local vni=$(cat $json | jq -r $param.vni)
+	local dev=vni$vni
 
-	ip link add name geneve$id type geneve id $vni remote $raddr
-	ip link set dev geneve$id netns $nse
+	ip link add name $dev type geneve id $vni remote $raddr
+	ip link set dev $dev netns $nse
 
-	nsenter --net=/var/run/netns/$nse $me ifsetup src geneve$id $json
+	nsenter --net=/var/run/netns/$nse $me ifsetup src $dev $json
 	rm -f /var/run/netns/$nse
 }
 
@@ -172,8 +183,8 @@ mknetns() {
 	ln -s $file /var/run/netns/$1
 }
 
-##  ifsetup src/dst <ifname>
-##    Shall be called inside a POD's netns. Reads /tmp/connection.json
+##  ifsetup src/dst <ifname> <json>
+##    Shall be called inside a POD's netns.
 ##
 cmd_ifsetup() {
 	echo "ifsetup $1 $2 $3"
@@ -197,6 +208,27 @@ cmd_ifsetup() {
 		$ip route add $p dev $iface
 	done
 }
+##  ifdel src/dst <json>
+##    Shall be called inside a POD's netns.
+##
+cmd_ifdel() {
+	echo "ifdel $1 $2"
+	local x=$1
+	json=$2
+
+	# We don't have the name of the interface to delete but we have
+	# the address.
+	local addr=$(cat $json | jq -r .context.ip_context.${x}_ip_addr | cut -d/ -f1)
+	test -n "$addr" || return 0
+	echo "Address of interface to delete [$addr]"
+
+	local dev=$(ip -j addr show | jq -r ".[]|select(.addr_info[].local == \"$addr\")|.ifname")
+	echo "Interface to delete [$dev]"
+
+	ip link del $dev
+	return 0
+}
+
 
 
 # Get the command
