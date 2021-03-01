@@ -238,7 +238,7 @@ func (s *calloutServer) Request(
 func (s *calloutServer) Close(
 	ctx context.Context, conn *networkservice.Connection) (*empty.Empty, error) {
 	//logrus.Infof("calloutServer(%s); close=%+v", s.id, conn)
-	closeCallout(ctx, conn)
+	logrus.Infof("calloutServer(%s); CLOSE", s.id)
 	return next.Server(ctx).Close(ctx, conn)
 }
 
