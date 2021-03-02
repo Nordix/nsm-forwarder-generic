@@ -71,28 +71,27 @@ EOF
 }
 
 cmd_request() {
-	# json is global
-	json=/tmp/connection.json
+        # json is global
+        mkdir -p $tmp
+	json=$tmp/connection.json
 	jq 'del(.connection.path)' > $json
 	cat $json
 
 	local mpref
 
-	local is_nsc=$(cat $json | jq -r .mechanism_preferences[0].parameters | jq 'has("name")')
-	
+	local is_nsc=$(cat $json | jq '.mechanism_preferences[0].parameters | has("name")')
+
 	if test "$is_nsc" != "true"; then
-		echo "Not an NSC request"
-		return 0;
+	    echo "Not an NSC request (is_nsc=$is_nsc)"
+	    cat $json | jq -r .mechanism_preferences[0].parameters
+	    return 0;
 	fi
 
-	local iface=$(cat $json | jq -r .mechanism_preferences[0].parameters.name)
-
-	mpref=$(cat $json | jq -r '.connection.mechanism.cls')
+	mpref=$(cat $json | jq -r '.mechanism_preferences[0].cls')
 	if test "$mpref" = "REMOTE"; then
-		remote_request_nsc $iface
 		return 0
 	fi
-	local_request
+	handle_request_nsc
 }
 
 cmd_close() {
@@ -100,41 +99,24 @@ cmd_close() {
 }
 
 # A remote request. We are on the NSC side.
-remote_request_nsc() {
-	echo "Remote request. NSC side"
+handle_request_nsc() {
+	echo "Remote or local request for NSC"
 	local id=$RANDOM
-
-	local iface=$1
+	local param=".mechanism_preferences[0].parameters"
+	local iface=$(cat $json | jq -r $param.name)
+	local dev=$iface$id
 	local nsc=nsc$id
-	local url=$(cat $json | jq -r .mechanism_preferences[0].parameters.inodeURL)
+	local url=$(cat $json | jq -r $param.inodeURL)
 	mknetns $nsc $url
 
-	local param=".connection.mechanism.parameters"
+	param=".connection.mechanism.parameters"
 	local vlan=$(cat $json | jq -r $param.vlan)
 
-	ip link add link eth2 name $iface type vlan id $vlan
-	ip link set up dev eth2
-	ip link set dev $iface netns $nsc
-
-	nsenter --net=/var/run/netns/$nsc $me ifsetup $iface
-}
-
-# Local request. NSC and NSE are on the same node (this node).
-local_request() {
-	echo "Local request."
-	local dev=$(cat $json | jq -r .mechanism_preferences[0].parameters.name)
-	local url
-
-	local nsc=nsc$id
-	url=$(cat $json | jq -r .mechanism_preferences[0].parameters.inodeURL)
-	mknetns $nsc $url
-	
-	local vlan=$(cat $json | jq -r .mechanism_preferences[0].parameters.vlan)
-	
 	ip link add link eth2 name $dev type vlan id $vlan
 	ip link set up dev eth2
 	ip link set dev $dev netns $nsc
-	nsenter --net=/var/run/netns/$nsc $me ifsetup $dev
+
+	nsenter --net=/var/run/netns/$nsc $me ifsetup $dev $json
 	return 0
 }
 
@@ -150,10 +132,10 @@ mknetns() {
 ##    Shall be called inside a POD's netns. Reads /tmp/connection.json
 ##
 cmd_ifsetup() {
-	echo "ifsetup $1"
-	json=/tmp/connection.json
-	local iface=$1
-	
+        json=$2
+	local iface=$(cat $json | jq -r .mechanism_preferences[0].parameters.name)
+	echo "ifsetup $1 > $iface"
+	ip link set dev $1 name $iface
 	ip link set up dev $iface
 
 	local addr=$(cat $json | jq -r .connection.context.ip_context.dst_ip_addr)
