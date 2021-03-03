@@ -1,7 +1,7 @@
 @startuml
 autonumber
 hide footbox
-title NSM Remote Xconnect Setup
+title NSM Remote Xconnect Close
 box "node 1" #LightBlue
 participant nsc as NSC order 10
 participant "nsmgr" as LN order 20

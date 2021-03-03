@@ -40,6 +40,8 @@ cmd_env() {
 }
 
 ## Callout functions;
+##  init
+##    Called on startup
 ##  request
 ##    Expects a NSM-request in json format on stdin.
 ##    This function shall setup communication and inject interfaces
@@ -51,6 +53,9 @@ cmd_env() {
 ##  close
 ##    Expects a NSM-connection in json format on stdin.
 ##
+cmd_init() {
+	return 0
+}
 cmd_mechanism() {
 	cat <<EOF
 [

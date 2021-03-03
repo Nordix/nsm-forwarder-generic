@@ -88,6 +88,10 @@ func main() {
 	}
 	logrus.Infof("Config read")
 
+	if err := initCallout(); err != nil {
+		logrus.Fatalf("initCallout %+v", err)
+	}
+
 	// retrieving svid
 	logrus.Infof("SPIFFE_ENDPOINT_SOCKET=%s", os.Getenv("SPIFFE_ENDPOINT_SOCKET"))
 	source, err := workloadapi.NewX509Source(ctx)
@@ -287,6 +291,17 @@ func calloutProgram() string {
 		return "/bin/forwarder.sh"
 	}
 	return callout
+}
+
+func initCallout() error {
+	logrus.Infof("initCallout")
+	cmd := exec.Command(calloutProgram(), "init")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return err
+	} else {
+		fmt.Println(string(out))
+	}
+	return nil
 }
 
 // Send the Request in json format on stdin to the callout script
