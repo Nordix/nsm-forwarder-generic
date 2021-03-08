@@ -36,6 +36,8 @@ spec:
                   fieldPath: status.podIP
             - name: CALLOUT
               value: "/bin/forwarder.sh"
+            - name: INTERFACE
+              value: "eth2"
           volumeMounts:
             - name: spire-agent-socket
               mountPath: /run/spire/sockets

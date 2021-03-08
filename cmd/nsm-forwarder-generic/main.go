@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"os/exec"
@@ -221,18 +222,20 @@ func (s *calloutServer) Request(
 
 	// Add our own ip to a remote mechanism
 	if s.id == "mechanism" {
-		if conn.Mechanism != nil {
-			if conn.Mechanism.Cls == cls.REMOTE {
-				conn.Mechanism.Parameters["dst_ip"] = os.Getenv("POD_IP")
-			}
-		} else {
+		if conn.Mechanism == nil {
 			// (can conn.Mechanism ever be nil?)
 			conn.Mechanism = &networkservice.Mechanism{
 				Cls:  cls.REMOTE,
 				Type: kernel.MECHANISM,
-				Parameters: map[string]string{
-					"dst_ip": os.Getenv("POD_IP"),
-				},
+				Parameters: map[string]string{},
+			}
+		}
+
+		if conn.Mechanism.Cls == cls.REMOTE {
+			if iface := os.Getenv("INTERFACE"); iface != "" {
+				setAddresses(iface, conn.Mechanism)
+			} else {
+				conn.Mechanism.Parameters["dst_ip"] = os.Getenv("POD_IP")
 			}
 		}
 	}
@@ -245,7 +248,6 @@ func (s *calloutServer) Close(
 	logrus.Infof("calloutServer(%s); CLOSE", s.id)
 	return next.Server(ctx).Close(ctx, conn)
 }
-
 type mechanismClient struct {
 	id    string
 	mutex sync.Mutex
@@ -280,6 +282,46 @@ func (k *mechanismClient) Close(
 	closeCallout(ctx, conn)
 	k.mutex.Unlock()
 	return next.Client(ctx).Close(ctx, conn, opts...)
+}
+
+// Set first-found GlobalUnicast IPv4 and IPv6 addresses
+func setAddresses(ifaceName string, m *networkservice.Mechanism) {
+	iface, err := net.InterfaceByName(ifaceName)
+	if err != nil {
+		logrus.Fatalf("Get InterfaceByName %s, %+v", ifaceName, err)
+	}
+	addr, err := iface.Addrs()
+	if err != nil {
+		logrus.Fatalf("Get Addrs from %s, %+v", ifaceName, err)
+	}
+	var ip net.IP
+	for _, a := range addr {
+		switch v := a.(type) {
+		case *net.IPAddr:
+			ip = v.IP
+		case *net.IPNet:
+			ip = v.IP
+		}
+		if ip.IsGlobalUnicast() {
+			if ip.To4() != nil {
+				// IPv4 address
+				if _, ok := m.Parameters["dst_ip"]; !ok {
+					m.Parameters["dst_ip"] = ip.String()
+					if _, ok = m.Parameters["dst_ip6"]; ok {
+						return
+					}
+				}
+			} else {
+				// IPv6 address
+				if _, ok := m.Parameters["dst_ip6"]; !ok {
+					m.Parameters["dst_ip6"] = ip.String()
+					if _, ok = m.Parameters["dst_ip"]; ok {
+						return
+					}
+				}
+			}
+		}
+	}
 }
 
 // ----------------------------------------------------------------------
