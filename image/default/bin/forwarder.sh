@@ -132,7 +132,7 @@ remote_request_nsc() {
 	ip link add name $dev type geneve id $vni remote $raddr
 	ip link set dev $dev netns $nsc
 
-	nsenter --net=/var/run/netns/$nsc $me ifsetup dst $dev $json
+	nsenter --net=/var/run/netns/$nsc $me ifsetup src $dev $json
 	rm -f /var/run/netns/$nsc
 }
 
@@ -151,7 +151,7 @@ remote_request_nse() {
 	ip link add name $dev type geneve id $vni remote $raddr
 	ip link set dev $dev netns $nse
 
-	nsenter --net=/var/run/netns/$nse $me ifsetup src $dev $json
+	nsenter --net=/var/run/netns/$nse $me ifsetup dst $dev $json
 	rm -f /var/run/netns/$nse
 }
 
