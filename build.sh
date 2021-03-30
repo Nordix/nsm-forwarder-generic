@@ -11,6 +11,7 @@ prg=$(basename $0)
 dir=$(dirname $0); dir=$(readlink -f $dir)
 me=$dir/$prg
 tmp=/tmp/${prg}_$$
+__forwarder=forwarder-generic
 
 die() {
     echo "ERROR: $*" >&2
@@ -37,7 +38,7 @@ dbg() {
 ##
 cmd_env() {
 
-	test -n "$__tag" || __tag="registry.nordix.org/cloud-native/nsm/forwarder-generic:latest"
+	test -n "$__tag" || __tag="registry.nordix.org/cloud-native/nsm/${__forwarder}:latest"
 
 	if test "$cmd" = "env"; then
 		set | grep -E '^(__.*)='
@@ -59,8 +60,8 @@ cmd_image() {
 ##    Build local go program. Output to ./image/default/bin
 ##
 cmd_go() {
-	local bin=$dir/image/default/bin/nsm-forwarder-generic
-	cd $dir/cmd/nsm-forwarder-generic
+	local bin=$dir/image/default/bin/nsm-$__forwarder
+	cd $dir/cmd/nsm-$__forwarder
 	CGO_ENABLED=0 GOOS=linux go build \
 		-ldflags "-extldflags '-static' -X main.version=$(date +%F:%T)" \
 		-o $bin ./ || die "Build failed"
@@ -92,3 +93,9 @@ cmd_$cmd "$@"
 status=$?
 rm -rf $tmp
 exit $status
+
+## Common option;
+##
+##  [--forwarder=<forwarder-generic|forwarder-kernel>]
+##    Default value: forwarder-generic
+##
