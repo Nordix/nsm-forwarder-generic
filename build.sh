@@ -11,7 +11,6 @@ prg=$(basename $0)
 dir=$(dirname $0); dir=$(readlink -f $dir)
 me=$dir/$prg
 tmp=/tmp/${prg}_$$
-__forwarder=forwarder-generic
 
 die() {
     echo "ERROR: $*" >&2
@@ -38,6 +37,7 @@ dbg() {
 ##
 cmd_env() {
 
+	test -n "$__forwarder" || __forwarder=forwarder-generic
 	test -n "$__tag" || __tag="registry.nordix.org/cloud-native/nsm/${__forwarder}:latest"
 
 	if test "$cmd" = "env"; then
@@ -51,7 +51,6 @@ cmd_env() {
 ##    Create the docker image and upload it to the local registry.
 ##
 cmd_image() {
-	cmd_env
 	cmd_go || die Build
 	docker build -t $__tag $dir/image
 }
@@ -60,6 +59,7 @@ cmd_image() {
 ##    Build local go program. Output to ./image/default/bin
 ##
 cmd_go() {
+	cmd_env
 	local bin=$dir/image/default/bin/nsm-$__forwarder
 	cd $dir/cmd/nsm-$__forwarder
 	CGO_ENABLED=0 GOOS=linux go build \
