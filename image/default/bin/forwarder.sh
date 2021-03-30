@@ -132,7 +132,7 @@ remote_request_nsc() {
 	ip link add name $dev type geneve id $vni remote $raddr
 	ip link set dev $dev netns $nsc
 
-	nsenter --net=/var/run/netns/$nsc $me ifsetup dst $dev $json
+	nsenter --net=/var/run/netns/$nsc $me ifsetup src $dev $json
 	rm -f /var/run/netns/$nsc
 }
 
@@ -151,7 +151,7 @@ remote_request_nse() {
 	ip link add name $dev type geneve id $vni remote $raddr
 	ip link set dev $dev netns $nse
 
-	nsenter --net=/var/run/netns/$nse $me ifsetup src $dev $json
+	nsenter --net=/var/run/netns/$nse $me ifsetup dst $dev $json
 	rm -f /var/run/netns/$nse
 }
 
@@ -173,8 +173,8 @@ local_request() {
 	ip link set dev veth$id-0 netns $nsc
 	ip link set dev veth$id-1 netns $nse
 
-	nsenter --net=/var/run/netns/$nsc $me ifsetup dst veth$id-0 $json
-	nsenter --net=/var/run/netns/$nse $me ifsetup src veth$id-1 $json
+	nsenter --net=/var/run/netns/$nsc $me ifsetup src veth$id-0 $json
+	nsenter --net=/var/run/netns/$nse $me ifsetup dst veth$id-1 $json
 
 	rm -f /var/run/netns/$nsc
 	rm -f /var/run/netns/$nse
@@ -196,15 +196,26 @@ cmd_ifsetup() {
 	echo "ifsetup $1 $2 $3"
 	json=$3
 	local iface=$2
-	if test "$1" = "dst"; then
-		# This is the NSC. Rename the interface
-		iface=$(cat $json | jq -r .mechanism_preferences[0].parameters.name)
-		ip link set dev $2 name $iface
+	local x=$1
+
+	# Rename the interface if a name is specified
+	local ifname
+	if test "$x" = "src"; then
+		ifname=$(cat $json | jq -r .mechanism_preferences[0].parameters.name)
+		if test "$ifname" != "null"; then
+			ip link set dev $iface name $ifname
+			iface=$ifname
+		fi
+	else
+		ifname=$(cat $json | jq -r .connection.mechanism.parameters.name)
+		if test "$ifname" != "null"; then
+			ip link set dev $iface name $ifname
+			iface=$ifname
+		fi
 	fi
 
 	ip link set up dev $iface
 
-	local x=$1
 	local addr=$(cat $json | jq -r .connection.context.ip_context.${x}_ip_addr)
 	local ip=ip
 	echo $addr | grep -q : && ip="ip -6"
