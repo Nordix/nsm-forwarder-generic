@@ -160,6 +160,7 @@ local_request() {
 	local dev=$(cat $json | jq -r .mechanism_preferences[0].parameters.name)
 	local url
 
+	local id=$RANDOM
 	local nsc=nsc$id
 	url=$(cat $json | jq -r .mechanism_preferences[0].parameters.inodeURL)
 	mknetns $nsc $url
