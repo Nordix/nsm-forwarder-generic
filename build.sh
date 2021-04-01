@@ -52,7 +52,7 @@ cmd_env() {
 ##
 cmd_image() {
 	cmd_go || die Build
-	docker build -t $__tag $dir/image
+	docker build -t $__tag $dir/image --build-arg FORWARDER=$__forwarder
 }
 
 ##  go
