@@ -38,6 +38,8 @@ spec:
               value: "/bin/forwarder.sh"
             - name: INTERFACE
               value: "eth1"
+            - name: NSM_LABELS
+              value: forwarder:forwarder-generic
           volumeMounts:
             - name: spire-agent-socket
               mountPath: /run/spire/sockets
