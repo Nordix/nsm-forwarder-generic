@@ -272,6 +272,9 @@ implemented in NSM next-gen. This is not a complete implemantation, but can be
 part of that. The forwarder creates a vlan interface in NSC, so substitute the
 function of the 'vlan-forwarder.sh' CALLOUT script with generic-forwarder.
 
+The remote use case sequence diagram;
+<img src="seq-remote-kernel-forwarder.svg" alt="Remote setup kernel forwarder" width="60%" />
+
 ### Building the kernel-forwarder
 
 The kernel-forwarder code relies on sdk-kernel repository. The 'vlan-forwarder'
@@ -296,7 +299,7 @@ replace (
 Build the code and the image using the '--forwarder' parameter
 ```
 ./build.sh go --forwarder=forwarder-kernel
-./build.sh image --forwarder=forwarder-kernel
+./build.sh image --forwarder=forwarder-kernel --tag=registry.nordix.org/cloud-native/nsm/forwarder-kernel:vlan-0.2
 ```
 
 
