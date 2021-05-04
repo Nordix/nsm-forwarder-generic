@@ -273,6 +273,7 @@ part of that. The forwarder creates a vlan interface in NSC, so substitute the
 function of the 'vlan-forwarder.sh' CALLOUT script with generic-forwarder.
 
 The remote use case sequence diagram;
+
 <img src="seq-remote-kernel-forwarder.svg" alt="Remote setup kernel forwarder" width="60%" />
 
 ### Building the kernel-forwarder
