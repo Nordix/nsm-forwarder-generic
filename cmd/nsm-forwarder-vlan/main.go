@@ -52,7 +52,7 @@ import (
 	"github.com/networkservicemesh/sdk-kernel/pkg/kernel/networkservice/chains/xconnectns"
 )
 
-// Config - configuration for cmd-forwarder-kernel
+// Config - configuration for cmd-forwarder-vlan
 type Config struct {
 	Name             string            `default:"forwarder" desc:"Name of Endpoint"`
 	NSName           string            `default:"xconnectns" desc:"Name of Network Service to Register with Registry"`
@@ -82,6 +82,7 @@ func main() {
 	// setup logging
 	// ********************************************************************************
 	logrus.SetFormatter(&nested.Formatter{})
+	logrus.SetLevel(logrus.DebugLevel)
 	log.EnableTracing(true)
 	ctx = log.WithFields(ctx, map[string]interface{}{"cmd": os.Args[0]})
 	ctx = log.WithLog(ctx, logruslogger.New(ctx))

@@ -265,20 +265,18 @@ instead the
 [Nordix/nsm-nse-generic](https://github.com/Nordix/nsm-nse-generic/)
 in L2 mode can be used.
 
-## Kernel forwarder
+## Vlan Forwarder
 
-It is also an experimental forwarder. The kernel forwarder is not yet
-implemented in NSM next-gen. This is not a complete implemantation, but can be
-part of that. The forwarder creates a vlan interface in NSC, so substitute the
-function of the 'vlan-forwarder.sh' CALLOUT script with generic-forwarder.
+This forwarder creates a vlan interface in NSC, so substitute the
+function of the 'vlan-forwarder.sh' CALLOUT script of generic-forwarder.
 
 The remote use case sequence diagram;
 
 <img src="seq-remote-kernel-forwarder.svg" alt="Remote setup kernel forwarder" width="60%" />
 
-### Building the kernel-forwarder
+### Building the Vlan Forwarder
 
-The kernel-forwarder code relies on sdk-kernel repository. The 'vlan-forwarder'
+The vlan forwarder code relies on sdk-kernel repository. The 'vlan-forwarder'
 branch of sdk-kernel fork on Nordix contains the code needed to build it.
 
 Clone the nsm-sdk-kernel to a convenient directory and check-out the
@@ -289,7 +287,7 @@ git clone git@github.com:Nordix/nsm-sdk-kernel.git
 git checkout -b vlan-forwader
 ```
 
-Add a "replace" section in `cmd/nsm-forwarder-kernel/go.mod`, to use the local sdk. Example;
+Add a "replace" section in `cmd/nsm-forwarder-vlan/go.mod`, to use the local sdk. Example;
 
 ```
 replace (
@@ -299,8 +297,8 @@ replace (
 
 Build the code and the image using the '--forwarder' parameter
 ```
-./build.sh go --forwarder=forwarder-kernel
-./build.sh image --forwarder=forwarder-kernel --tag=registry.nordix.org/cloud-native/nsm/forwarder-kernel:vlan-0.2
+./build.sh go --forwarder=forwarder-vlan
+./build.sh image --forwarder=forwarder-vlan --tag=registry.nordix.org/cloud-native/nsm/forwarder-vlan:latest
 ```
 
 

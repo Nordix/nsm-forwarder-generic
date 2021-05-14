@@ -96,6 +96,6 @@ exit $status
 
 ## Common option;
 ##
-##  [--forwarder=<forwarder-generic|forwarder-kernel>]
+##  [--forwarder=<forwarder-generic|forwarder-vlan>]
 ##    Default value: forwarder-generic
 ##
