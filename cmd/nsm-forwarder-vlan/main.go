@@ -42,10 +42,7 @@ import (
 
 	registryapi "github.com/networkservicemesh/api/pkg/api/registry"
 	"github.com/networkservicemesh/sdk/pkg/networkservice/common/authorize"
-	registryinterpose "github.com/networkservicemesh/sdk/pkg/registry/common/interpose"
-	registryrefresh "github.com/networkservicemesh/sdk/pkg/registry/common/refresh"
-	registrysendfd "github.com/networkservicemesh/sdk/pkg/registry/common/sendfd"
-	registrychain "github.com/networkservicemesh/sdk/pkg/registry/core/chain"
+	registryclient "github.com/networkservicemesh/sdk/pkg/registry/chains/client"
 	"github.com/networkservicemesh/sdk/pkg/tools/grpcutils"
 	"github.com/networkservicemesh/sdk/pkg/tools/spiffejwt"
 
@@ -139,12 +136,9 @@ func main() {
 
 	// register with the registry
 	logrus.Infof("NSM: Connecting to NSE registry %v", config.ConnectTo.String())
-	registryClient := registrychain.NewNetworkServiceEndpointRegistryClient(
-		registryinterpose.NewNetworkServiceEndpointRegistryClient(),
-		registryrefresh.NewNetworkServiceEndpointRegistryClient(),
-		registrysendfd.NewNetworkServiceEndpointRegistryClient(),
-		registryapi.NewNetworkServiceEndpointRegistryClient(registryCC),
-	)
+
+	registryClient := registryclient.NewNetworkServiceEndpointRegistryInterposeClient(ctx, registryCC)
+
 	// TODO - something smarter for expireTime
 	expireTime, err := ptypes.TimestampProto(time.Now().Add(config.MaxTokenLifetime))
 	if err != nil {
