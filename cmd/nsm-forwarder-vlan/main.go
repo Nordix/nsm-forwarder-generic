@@ -101,15 +101,6 @@ func main() {
 	clientCreds := grpcfd.TransportCredentials(credentials.NewTLS(tlsconfig.MTLSClientConfig(source, source, tlsconfig.AuthorizeAny())))
 	serverCreds := grpcfd.TransportCredentials(credentials.NewTLS(tlsconfig.MTLSServerConfig(source, source, tlsconfig.AuthorizeAny())))
 
-	registryCC, err := grpc.DialContext(ctx,
-		config.ConnectTo.String(),
-		grpc.WithTransportCredentials(clientCreds),
-		grpc.WithBlock(),
-	)
-	if err != nil {
-		logrus.Fatalf("failed to create registryCC: %+v", err)
-	}
-
 	// create xconnect network service endpoint
 	endpoint := xconnectns.NewServer(
 		ctx,
@@ -136,6 +127,18 @@ func main() {
 
 	// register with the registry
 	logrus.Infof("NSM: Connecting to NSE registry %v", config.ConnectTo.String())
+
+	registryCreds := credentials.NewTLS(tlsconfig.MTLSClientConfig(source, source, tlsconfig.AuthorizeAny()))
+	registryCreds = grpcfd.TransportCredentials(registryCreds)
+	registryCC, err := grpc.DialContext(ctx,
+		config.ConnectTo.String(),
+		grpc.WithTransportCredentials(registryCreds),
+		grpc.WithBlock(),
+	)
+
+	if err != nil {
+		logrus.Fatalf("failed to create registryCC: %+v", err)
+	}
 
 	registryClient := registryclient.NewNetworkServiceEndpointRegistryInterposeClient(ctx, registryCC)
 
