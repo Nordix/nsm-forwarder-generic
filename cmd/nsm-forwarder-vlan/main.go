@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Cisco and/or its affiliates.
+// Copyright (c) 2020 Nordix and/or its affiliates.
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -41,12 +41,12 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	registryapi "github.com/networkservicemesh/api/pkg/api/registry"
+	"github.com/networkservicemesh/sdk-kernel/pkg/kernel/networkservice/chains/xconnectns"
 	"github.com/networkservicemesh/sdk/pkg/networkservice/common/authorize"
 	registryclient "github.com/networkservicemesh/sdk/pkg/registry/chains/client"
 	"github.com/networkservicemesh/sdk/pkg/tools/grpcutils"
+	"github.com/networkservicemesh/sdk/pkg/tools/opentracing"
 	"github.com/networkservicemesh/sdk/pkg/tools/spiffejwt"
-
-	"github.com/networkservicemesh/sdk-kernel/pkg/kernel/networkservice/chains/xconnectns"
 )
 
 // Config - configuration for cmd-forwarder-vlan
@@ -128,19 +128,20 @@ func main() {
 	// register with the registry
 	logrus.Infof("NSM: Connecting to NSE registry %v", config.ConnectTo.String())
 
-	registryCreds := credentials.NewTLS(tlsconfig.MTLSClientConfig(source, source, tlsconfig.AuthorizeAny()))
-	registryCreds = grpcfd.TransportCredentials(registryCreds)
-	registryCC, err := grpc.DialContext(ctx,
-		config.ConnectTo.String(),
-		grpc.WithTransportCredentials(registryCreds),
+	clientOptions := append(
+		opentracing.WithTracingDial(),
 		grpc.WithBlock(),
+		grpc.WithDefaultCallOptions(grpc.WaitForReady(true)),
+		grpc.WithTransportCredentials(
+			grpcfd.TransportCredentials(
+				credentials.NewTLS(
+					tlsconfig.MTLSClientConfig(source, source, tlsconfig.AuthorizeAny()),
+				),
+			),
+		),
 	)
 
-	if err != nil {
-		logrus.Fatalf("failed to create registryCC: %+v", err)
-	}
-
-	registryClient := registryclient.NewNetworkServiceEndpointRegistryInterposeClient(ctx, registryCC)
+	registryClient := registryclient.NewNetworkServiceEndpointRegistryInterposeClient(ctx, &config.ConnectTo, registryclient.WithDialOptions(clientOptions...))
 
 	// TODO - something smarter for expireTime
 	expireTime, err := ptypes.TimestampProto(time.Now().Add(config.MaxTokenLifetime))
