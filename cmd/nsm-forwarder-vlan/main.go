@@ -27,6 +27,7 @@ import (
 	"time"
 
 	nested "github.com/antonfisher/nested-logrus-formatter"
+	xconnectns "github.com/networkservicemesh/sdk-kernel/pkg/kernel/networkservice/chains/xconnectns/vlan"
 
 	"github.com/edwarnicke/grpcfd"
 	"github.com/edwarnicke/signalctx"
@@ -41,7 +42,6 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	registryapi "github.com/networkservicemesh/api/pkg/api/registry"
-	"github.com/networkservicemesh/sdk-kernel/pkg/kernel/networkservice/chains/xconnectns"
 	"github.com/networkservicemesh/sdk/pkg/networkservice/common/authorize"
 	registryclient "github.com/networkservicemesh/sdk/pkg/registry/chains/client"
 	"github.com/networkservicemesh/sdk/pkg/tools/grpcutils"
